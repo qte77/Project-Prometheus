@@ -42,11 +42,31 @@ to run by default.
 
 ## Setup
 
-There's no `requirements.txt` in the repo yet, so the install step below
-doesn't work today — noting it here rather than pretending otherwise:
-
-    [TODO: pip install -r requirements.txt, or `uv sync` once pyproject.toml lands]
+    uv sync                       # core deps (numpy/scipy/flask/pydantic/rasterio/...)
+    uv sync --extra torch         # + PyTorch, for the gradient-based VAE path
+                                   #   (optional -- mk20 falls back to a NumPy-only
+                                   #   scorer without it)
+    uv sync --extra server        # + gunicorn, for production serving
+    uv sync --extra finetune      # + optuna, for finetune20.py's hyperparameter search
     python xenarch_mk20_script.py
+
+## Tooling
+
+- **`config_validator.py`** — validates `config_iter*.json` weight schemas before a
+  run picks up the wrong one:
+
+      python config_validator.py --schema mk20|mk17 config_iter2.json config_iter3.json
+
+- **`eval_scoring.py`** — fast/small-scale proof that mk20's scoring logic separates
+  known technosignatures from natural terrain (see its own module docstring for what
+  this does and doesn't claim):
+
+      python eval_scoring.py --positive "Test data" --negative "training data" \
+          --out eval_result.json
+
+- **`xenarch_mk3_script.py`**'s `TechnosignatureDB` reads its Postgres connection from
+  `TECHNOSIG_DB_NAME`, `TECHNOSIG_DB_USER`, `TECHNOSIG_DB_PASSWORD`, `TECHNOSIG_DB_HOST`,
+  `TECHNOSIG_DB_PORT` (falling back to the generic Postgres dev default when unset).
 
 ## Data
 
@@ -55,6 +75,9 @@ Reconnaissance Orbiter (HiRISE) cameras. Two harvesters populate it:
 
 - `lroc_fetch.py` — natural-terrain reference corpus (the negative set).
 - `training data/download-curated-img.py` — curated HiRISE/CTX imagery.
+- `apollo16_agent.py` — Apollo 16 descent-stage imagery, a known-truth positive
+  control for `eval_scoring.py` (`Test data/`). Run `python apollo16_agent.py
+  --self-test` for an offline sanity check of its geolocation/ranking logic.
 
 Reference portals for finding more source imagery by hand:
 
