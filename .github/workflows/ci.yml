@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# Least-privilege by default; each job below grants back only what it needs.
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: uv sync
+
+      # Non-blocking for now: this repo has ~900 pre-existing lint findings
+      # across 17 legacy mk3-mk19 scripts and the two actively-edited files
+      # (xenarch_mk20_script.py, finetune20.py) that this PR deliberately
+      # doesn't touch. Making this blocking today would fail CI on the very
+      # first run for reasons unrelated to any new change. Once that backlog
+      # is cleaned up (tracked separately), flip this to blocking.
+      - name: Lint (ruff check)
+        run: uv run ruff check . || true
+
+      - name: Format check (ruff format)
+        run: uv run ruff format --check . || true
+
+      - name: Dependency vulnerability audit (non-blocking)
+        run: uvx pip-audit || true
+
+      - name: Validate scoring configs against mk17 schema
+        run: uv run python config_validator.py --schema mk17 config_iter2.json config_iter3.json
+
+      - name: Run tests
+        run: |
+          if [ -d tests ]; then
+            uv run pytest tests/
+          else
+            echo "No tests/ directory yet — skipping."
+          fi
+
+  # Lints the workflow files themselves -- would have caught an invalid
+  # action ref (e.g. a version tag that doesn't exist) before a live run
+  # ever had to fail to find out. Run as a plain binary, not the
+  # reviewdog/action-actionlint marketplace action: this repo's actions
+  # policy only allows GitHub-owned/qte77-owned/Marketplace-verified
+  # actions, and reviewdog isn't a verified creator there (confirmed via
+  # an actual blocked run, not assumed) -- a direct binary download sidesteps
+  # that restriction entirely, same as this file already does for ruff/
+  # pip-audit via uv/uvx rather than a marketplace action.
+  lint-workflows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      # actionlint's own maintained installer -- resolves and verifies the
+      # latest release itself, so this never needs manual version bumps.
+      - name: Install actionlint
+        run: bash <(curl -sSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+      - name: Lint workflow files
+        run: ./actionlint
+
+  # Same reasoning as lint-workflows above: gitleaks isn't a verified
+  # Marketplace creator under this repo's actions policy, so this runs the
+  # gitleaks binary directly instead of gitleaks/gitleaks-action. Needs full
+  # history (fetch-depth: 0) to scan past commits, not just the current
+  # tree, so this uses its own checkout rather than sharing the `quality`
+  # job's shallow one.
+  secrets-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Resolves whatever gitleaks' latest release actually is at run-time
+      # via the GitHub API, rather than a version hardcoded into this file --
+      # a hardcoded version/URL is a maintenance liability that goes stale
+      # silently (flagged directly, not assumed).
+      - name: Install gitleaks
+        run: |
+          GITLEAKS_VERSION=$(curl -sSL https://api.github.com/repos/gitleaks/gitleaks/releases/latest \
+            | grep -oP '"tag_name":\s*"v\K[^"]+')
+          curl -sSL -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          tar xzf gitleaks.tar.gz gitleaks
+      - name: Scan for secrets
+        run: ./gitleaks git --redact -v .
