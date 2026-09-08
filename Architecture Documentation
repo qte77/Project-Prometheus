@@ -1,4 +1,14 @@
 🏗️ Architecture Documentation
+
+> **Scope note:** everything below describes the Mk4 (standard autoencoder)
+> and Mk5 (VAE) design — the math, the class hierarchy, and the tuning
+> tables are accurate for that era. It predates Mk6 through the current
+> Mk20 (`xenarch_mk20_script.py`), which added trimmed-robust training,
+> multi-metric scoring, low-information chip rejection, and a headless
+> runner among other changes — none of that is reflected here yet. Read
+> this for the underlying autoencoder/VAE theory; read `xenarch_mk20_script.py`'s
+> own module docstring for what the pipeline actually does today.
+
 System Overview
 This document provides a comprehensive technical overview of the Lunar Anomaly Detection Pipeline, including architectural decisions, implementation details, and theoretical foundations.
 Table of Contents
@@ -507,7 +517,7 @@ Solution: Reduce batch_size, reduce chip_size, use gradient checkpointing
 Issue: Poor reconstruction quality
 Solution: Increase num_epochs, reduce learning_rate, add batch normalization
 
-This architecture document is maintained alongside the codebase and updated with each major version release.
-Version: 1.0
+Version: 1.0 — covers the Mk4/Mk5 design only (see scope note at the top of
+this document). Not updated for Mk6 through Mk20.
 Last Updated: January 2026
 Authors: Project Contributors

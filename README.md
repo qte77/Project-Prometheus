@@ -1,264 +1,82 @@
-🌙 Lunar Anomaly Detection Pipeline
-An unsupervised machine learning system for detecting artificial structures and anomalies on planetary surfaces using autoencoder-based reconstruction error analysis.
-Show Image
-Show Image
-Show Image
+# Xenarch — Planetary Technosignature Detection
 
-🎯 Overview
-This project implements a novel approach to technosignature detection on lunar and planetary surfaces. By training exclusively on natural geological features, the system learns what "normal" looks like and flags anything anomalous - including artificial structures like landing sites, rovers, and human-made equipment.
-Key Features
+Unsupervised anomaly detection for lunar and planetary surface imagery. A
+variational autoencoder trains exclusively on natural terrain, then flags
+whatever it reconstructs poorly — landing sites, rovers, other human-made
+hardware — as a candidate technosignature.
 
-Unsupervised Learning: Trains only on natural terrain, no labeled anomalies needed
-High Resolution: Processes 128×128 pixel chips for detailed feature detection
-Adaptive Architecture: Automatically adjusts to different input resolutions (64×64, 128×128, 256×256)
-Variational Autoencoder Support: Mk5 implementation with probabilistic latent space
-Real-World Validation: Tested on Apollo landing sites with actual human artifacts
+## Why this exists
 
-Applications
+Human-made structures on another world's surface are rare, small, and by
+definition don't look like the geology around them. There aren't enough
+labeled anomalies to train a classifier on. So Xenarch trains only on what
+natural terrain looks like, and treats high reconstruction error as the
+signal: the model has never seen anything like this chip before.
 
-Planetary surface analysis
-Archaeological site detection
-Infrastructure monitoring on Mars/Moon missions
-Geological anomaly identification
-Change detection in satellite imagery
+## Goals
 
-🚀 Quick Start
+- Detect known human artifacts (Apollo landing sites) in orbital imagery
+  without ever training on a labeled anomaly.
+- Keep false positives from natural look-alikes — crater rims, boulder
+  fields, shadow patterns — low enough for the output to be worth reviewing.
+- Stay reproducible: same training corpus and config should give the same
+  score every time.
 
-Prerequisites
-bashPython 3.8+
-CUDA-capable GPU (optional, but recommended)
-Installation
-bash# Clone the repository
-git clone https://github.com/yourusername/lunar-anomaly-detection.git
-cd lunar-anomaly-detection
+## Current pipeline
 
-# Create virtual environment
-```
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+`xenarch_mk20_script.py` is the active implementation: a VAE trained
+against a fixed natural-terrain baseline (`training data/`), servable either
+as a Flask web app or run headless against a folder of imagery.
 
-# Install dependencies
-pip install -r requirements.txt
-Basic Usage
-bash# Run the pipeline with default settings (64×64 resolution)
-python anomaly_detection_pipeline.py
+    python xenarch_mk20_script.py --run [DIR]   # headless: train + score a folder
+    python xenarch_mk20_script.py               # serve the web app (Flask)
+    gunicorn xenarch_mk20_script:app            # production (Procfile-managed)
 
-# Run with high resolution (128×128)
-python anomaly_detection_pipeline_hires.py
+Full CLI flags and environment variables are documented in that script's own
+module docstring.
 
-# Run Mk5 with Variational Autoencoder
-python xenarch_mk5_script.py
-```
-📁 Project Structure
-```
-lunar-anomaly-detection/
-├── anomaly_detection_pipeline.py     # Main Mk4 pipeline (64×64)
-├── anomaly_detection_pipeline_hires.py  # High-res version (128×128)
-├── xenarch_mk5_script.py             # Mk5 with VAE architecture
-├── requirements.txt                   # Python dependencies
-├── README.md                          # This file
-├── ARCHITECTURE.md                    # Detailed technical documentation
-├── .gitignore                         # Git ignore rules
-│
-├── training data/                     # Natural lunar terrain (not included)
-├── Test data/                         # Test images with potential anomalies
-├── data/                              # Processed chips and labels
-│   ├── processed/
-│   │   ├── training_chips/
-│   │   └── test_chips/
-│   └── models/                        # Saved model checkpoints
-│
-├── results/                           # Generated visualizations
-│   ├── reconstruction_examples.png
-│   ├── top_anomalies.png
-│   └── training_curve.png
-│
-└── logs/                              # Training logs
-```
-🔬 How It Works
-1. Training Phase
-The model trains exclusively on natural geological features:
+`xenarch_mk3_script.py` through `xenarch_mk19_script.py` are version
+history, not the current interface — each is a snapshot of one design
+iteration, useful for comparing against an older result but not the script
+to run by default.
 
-Craters
-Rocky terrain
-Smooth regolith
-Natural surface variations
+## Setup
 
-2. Detection Phase
-When shown test images, the model:
+There's no `requirements.txt` in the repo yet, so the install step below
+doesn't work today — noting it here rather than pretending otherwise:
 
-Attempts to reconstruct each chip
-Calculates reconstruction error
-Flags high-error regions as anomalies
+    [TODO: pip install -r requirements.txt, or `uv sync` once pyproject.toml lands]
+    python xenarch_mk20_script.py
 
-3. Why It Works
+## Data
 
-Natural features → Low reconstruction error (model has seen similar patterns)
-Artificial structures → High reconstruction error (model has never seen these patterns)
+Training imagery comes from the Lunar Reconnaissance Orbiter (LROC) and Mars
+Reconnaissance Orbiter (HiRISE) cameras. Two harvesters populate it:
 
-📊 Results
-Performance Metrics
-Model VersionResolutionLatent DimTraining TimeDetection RateMk4 Baseline64×64128~10 minGoodMk4 Optimized64×6448~10 minBetterHigh-Res128×128128~25 minBestMk5 VAE64×6432-64~15 minExcellent
-Example Detections
-The system successfully flags:
+- `lroc_fetch.py` — natural-terrain reference corpus (the negative set).
+- `training data/download-curated-img.py` — curated HiRISE/CTX imagery.
 
-✅ Apollo Lunar Module descent stages
-✅ Rover tracks and disturbed regolith
-✅ Scientific equipment (EASEP)
-✅ Landing pads and geometric structures
+Reference portals for finding more source imagery by hand:
 
-While correctly identifying as natural:
+- [ISSDC PRADAN — Chandrayaan-2 browse](https://pradan.issdc.gov.in/ch2/protected/browse.xhtml)
+- [ISSDC PRADAN — TMC2](https://pradan.issdc.gov.in/ch2/protected/browse.xhtml?id=tmc2)
+- [PDS Imaging Atlas — HiRISE EDR search](https://pds-imaging.jpl.nasa.gov/tools/atlas/search?gather.common.instrument=HIRISE&gather.common.product_type=EDR)
+- [PDS Imaging Atlas — MGS/MOC search](https://pds-imaging.jpl.nasa.gov/tools/atlas/search?gather.common.spacecraft=mars_global_surveyor&gather.common.instrument=MOC) (lower resolution)
+- [PDS Imaging Atlas — LRO search](https://pds-imaging.jpl.nasa.gov/tools/atlas/search?gather.common.mission=lro) (rough fit, not a primary source)
 
-✅ Complex crater formations
-✅ Boulder fields
-✅ Unusual lighting conditions
-✅ Natural linear features (rilles)
+## Learn more
 
-🛠️ Configuration
-Key Hyperparameters
-Edit these in the config dictionary:
-pythonconfig = {
-    'chip_size': 128,              # Resolution: 64, 128, or 256
-    'latent_dim': 48,              # Bottleneck size: 32-128
-    'batch_size': 16,              # Adjust based on GPU memory
-    'num_epochs': 20,              # Training epochs
-    'learning_rate': 0.001,        # Adam optimizer learning rate
-    'anomaly_threshold_percentile': 95,  # Detection sensitivity
-}
-Tuning for Your Use Case
-High Sensitivity (catch more anomalies):
+- **Architecture, math, and design rationale:** see `Architecture
+  Documentation`.
+- **Research writeup:** `Xenarch_Mk13_White_Paper*.docx` — note the
+  validation claims there are for Mk13, not yet re-verified against the
+  current Mk20 head.
 
-latent_dim: 32
-anomaly_threshold_percentile: 90
+## License
 
-High Precision (fewer false positives):
+This README used to assert MIT with no `LICENSE` file backing it up.
+`[TODO: owner — confirm the license and add the file]`
 
-latent_dim: 64
-anomaly_threshold_percentile: 97
+## Contact
 
-High Resolution (detailed features):
-
-chip_size: 128 or 256
-Reduce batch_size to fit GPU memory
-
-📦 Data
-Training Data
-Not included in repository due to size. Download natural lunar terrain imagery from:
-
-NASA LROC Image Viewer
-NASA TREK API
-Planetary Data System (PDS)
-
-Place images in training data/ folder.
-Test Data
-Example test data with Apollo landing sites available at:
-
-Download Link - Google Drive (add your link)
-Or use NASA TREK tiles covering known landing sites
-
-Supported Formats
-
-GeoTIFF (.tif, .tiff)
-PNG (.png)
-JPEG (.jpg, .jpeg)
-
-🧪 Advanced Usage
-Training on Custom Data
-pythonfrom anomaly_detection_pipeline import *
-
-# Configure for your data
-config = {
-    'data_dir': './my_data',
-    'chip_size': 128,
-    'latent_dim': 48,
-    # ... other settings
-}
-
-# Run pipeline
-main()
-Using Pre-trained Models
-pythonimport torch
-from anomaly_detection_pipeline import AdaptiveConvolutionalAutoencoder
-
-# Load model
-model = AdaptiveConvolutionalAutoencoder(latent_dim=48, input_size=128)
-model.load_state_dict(torch.load('data/models/autoencoder_128.pth'))
-model.eval()
-
-# Run inference on new image
-# ... your code here
-Batch Processing
-python# Process multiple test directories
-test_dirs = ['Test data/apollo11', 'Test data/apollo17', 'Test data/chang_e']
-
-for test_dir in test_dirs:
-    # Extract and analyze chips
-    # ... processing code
-🤝 Contributing
-Contributions are welcome! Please:
-
-Fork the repository
-Create a feature branch (git checkout -b feature/amazing-feature)
-Commit your changes (git commit -m 'Add amazing feature')
-Push to the branch (git push origin feature/amazing-feature)
-Open a Pull Request
-
-Development Roadmap
-
- Multi-scale analysis (combine 64×64, 128×128, 256×256)
- Attention mechanisms for spatial localization
- Transfer learning from Earth satellite imagery
- Real-time inference optimization
- Web interface for visualization
- Support for multi-spectral imagery
-
-📝 Citation
-If you use this work in your research, please cite:
-bibtex@software{lunar_anomaly_detection,
-  author = {Your Name},
-  title = {Lunar Anomaly Detection Pipeline},
-  year = {2026},
-  url = {https://github.com/yourusername/lunar-anomaly-detection}
-}
-📄 License
-This project is licensed under the MIT License - see the LICENSE file for details.
-🙏 Acknowledgments
-
-NASA Lunar Reconnaissance Orbiter (LRO) team for imagery
-NASA TREK for public data access
-Apollo missions for validation data
-PyTorch and scikit-learn communities
-
-📧 Contact
-Your Name
-
-Email: your.email@example.com
-GitHub: @yourusername
-Project Link: https://github.com/yourusername/lunar-anomaly-detection
-
-🐛 Known Issues
-
-Large datasets (>1GB) may require batch processing
-GPU memory constraints with 256×256 chips (reduce batch size)
-Some natural linear features (fault lines, rilles) may trigger false positives
-
-⚡ Performance Tips
-
-Use GPU: 10-20× faster training with CUDA
-Adjust batch size: Maximize GPU utilization without OOM errors
-Pre-filter chips: Skip low-variance chips during extraction
-Use mixed precision: Enable for faster training on modern GPUs
-
-python# Enable mixed precision training
-from torch.cuda.amp import autocast, GradScaler
-scaler = GradScaler()
-🔗 Related Projects
-
-Planetary Computer
-Mars Rover Image Analysis
-Lunar Mapping Tools
-
-
-⭐ Star this repository if you find it useful!
-Last Updated: January 2026
-
+`[TODO: owner]`
