@@ -324,11 +324,13 @@ class SyntheticAnnotator:
 class TechnosignatureDB:
     """Database interface for storing training data"""
     
-    def __init__(self, dbname='technosignatures', user='postgres', 
-                 password='postgres', host='localhost', port=5432):
+    def __init__(self, dbname=None, user=None, password=None, host=None, port=None):
         self.conn = psycopg2.connect(
-            dbname=dbname, user=user, password=password,
-            host=host, port=port
+            dbname=dbname or os.environ.get('TECHNOSIG_DB_NAME', 'technosignatures'),
+            user=user or os.environ.get('TECHNOSIG_DB_USER', 'postgres'),
+            password=password or os.environ.get('TECHNOSIG_DB_PASSWORD', 'postgres'),
+            host=host or os.environ.get('TECHNOSIG_DB_HOST', 'localhost'),
+            port=port or int(os.environ.get('TECHNOSIG_DB_PORT', 5432)),
         )
         self.cursor = self.conn.cursor()
         
